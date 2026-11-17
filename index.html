@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Video ke Gambar</title>
+<style>
+  :root { --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --muted:#6b7686; --accent:#1a73e8; --line:#dde3ea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161c; --card:#1b212a; --ink:#e8edf3; --muted:#93a0b0; --accent:#6aa9ff; --line:#2b3440; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.4rem; margin:8px 0 4px; }
+  p.sub { margin:0 0 16px; color:var(--muted); font-size:.9rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+  label { display:block; font-size:.85rem; color:var(--muted); margin:10px 0 4px; }
+  input[type=file], input[type=number] {
+    width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;
+    background:var(--bg); color:var(--ink); font-size:1rem;
+  }
+  .row { display:flex; gap:10px; }
+  .row > div { flex:1; }
+  button {
+    width:100%; margin-top:14px; padding:12px; border:0; border-radius:10px;
+    background:var(--accent); color:#fff; font-size:1rem; font-weight:600;
+  }
+  button:disabled { opacity:.5; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  video { width:100%; border-radius:8px; margin-top:10px; background:#000; display:none; }
+  progress { width:100%; height:10px; margin-top:12px; display:none; }
+  #status { font-size:.9rem; color:var(--muted); margin-top:8px; min-height:1.2em; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-top:10px; }
+  .thumb { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--card); }
+  .thumb img { width:100%; display:block; }
+  .thumb a { display:block; text-align:center; padding:6px; font-size:.8rem; color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Video ke Gambar (PNG)</h1>
+  <p class="sub">Semua diproses di HP/browser Anda. Video tidak diunggah ke mana pun.</p>
+
+  <div class="card">
+    <label for="file">Pilih video</label>
+    <input type="file" id="file" accept="video/*">
+    <video id="preview" controls playsinline muted></video>
+
+    <div class="row">
+      <div>
+        <label for="interval">Ambil gambar tiap (detik)</label>
+        <input type="number" id="interval" value="1" min="0.1" step="0.1">
+      </div>
+      <div>
+        <label for="maxw">Lebar maks (px, 0 = asli)</label>
+        <input type="number" id="maxw" value="0" min="0" step="10">
+      </div>
+    </div>
+
+    <button id="go" disabled>Ekstrak Gambar</button>
+    <progress id="bar" value="0" max="1"></progress>
+    <div id="status"></div>
+  </div>
+
+  <div class="card" id="result" style="display:none">
+    <strong id="count"></strong>
+    <button id="zip" class="secondary">Unduh Semua (ZIP)</button>
+    <div id="grid"></div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const fileEl = $('file'), video = $('preview'), go = $('go'), bar = $('bar');
+  const statusEl = $('status'), grid = $('grid'), result = $('result'), countEl = $('count');
+  let frames = []; // {name, blob}
+  let baseName = 'video';
+
+  fileEl.addEventListener('change', () => {
+    const f = fileEl.files[0];
+    if (!f) return;
+    baseName = f.name.replace(/\.[^.]+$/, '') || 'video';
+    video.src = URL.createObjectURL(f);
+    video.style.display = 'block';
+    go.disabled = false;
+    statusEl.textContent = '';
+  });
+
+  const once = (el, ev) => new Promise((res) => el.addEventListener(ev, res, { once: true }));
+
+  go.addEventListener('click', async () => {
+    const interval = Math.max(0.1, parseFloat($('interval').value) || 1);
+    const maxw = Math.max(0, parseInt($('maxw').value, 10) || 0);
+
+    go.disabled = true;
+    grid.innerHTML = '';
+    frames = [];
+    result.style.display = 'none';
+    bar.style.display = 'block';
+    bar.value = 0;
+
+    try {
+      if (!isFinite(video.duration) || video.readyState < 1) await once(video, 'loadedmetadata');
+      video.pause();
+
+      const duration = video.duration;
+      const times = [];
+      for (let t = 0; t < duration; t += interval) times.push(t);
+      if (!times.length) times.push(0);
+
+      let w = video.videoWidth, h = video.videoHeight;
+      if (maxw && w > maxw) { h = Math.round(h * maxw / w); w = maxw; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      const pad = String(times.length).length;
+
+      for (let i = 0; i < times.length; i++) {
+        video.currentTime = Math.min(times[i], Math.max(0, duration - 0.05));
+        await once(video, 'seeked');
+        ctx.drawImage(video, 0, 0, w, h);
+        const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+        const name = `${baseName}_${String(i + 1).padStart(pad, '0')}.png`;
+        frames.push({ name, blob });
+        addThumb(name, blob);
+        bar.value = (i + 1) / times.length;
+        statusEl.textContent = `Memproses ${i + 1} dari ${times.length}...`;
+      }
+
+      statusEl.textContent = 'Selesai.';
+      countEl.textContent = `${frames.length} gambar PNG`;
+      result.style.display = 'block';
+    } catch (e) {
+      statusEl.textContent = 'Gagal: ' + e.message;
+    } finally {
+      go.disabled = false;
+    }
+  });
+
+  function addThumb(name, blob) {
+    const url = URL.createObjectURL(blob);
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.innerHTML = `<img src="${url}" alt="${name}"><a href="${url}" download="${name}">Unduh</a>`;
+    grid.appendChild(div);
+  }
+
+  $('zip').addEventListener('click', async () => {
+    if (!window.JSZip) { statusEl.textContent = 'Library ZIP gagal dimuat. Cek koneksi, lalu muat ulang halaman.'; return; }
+    const btn = $('zip');
+    btn.disabled = true; btn.textContent = 'Membuat ZIP...';
+    try {
+      const zip = new JSZip();
+      frames.forEach((f) => zip.file(f.name, f.blob));
+      const out = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(out);
+      a.download = baseName + '_gambar.zip';
+      a.click();
+    } catch (e) {
+      statusEl.textContent = 'Gagal membuat ZIP: ' + e.message;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Unduh Semua (ZIP)';
+    }
+  });
+})();
+</script>
+</body>
+</html>
