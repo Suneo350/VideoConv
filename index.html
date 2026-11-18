@@ -61,7 +61,7 @@
       <label for="url">Link langsung video (.mp4 / .webm)</label>
       <input type="url" id="url" placeholder="https://contoh.com/video.mp4" inputmode="url">
       <button id="loadUrl" type="button">Muat Video</button>
-      <div class="note">Server pemilik video harus mengizinkan akses dari situs lain (CORS). Jika gagal, unduh videonya ke HP lalu pakai tab "Dari file".</div>
+      <div class="note">Jika server video menolak akses langsung, halaman otomatis mencoba lewat proxy (maks. 300 MB). Tidak berlaku untuk YouTube, TikTok, Instagram, dan sejenisnya. Untuk itu, unduh videonya lalu pakai tab "Dari file".</div>
     </div>
 
     <div id="boxFile" class="hide">
@@ -155,7 +155,7 @@
   $('tabFile').onclick = () => tab('file');
 
   // Muat video
-  async function loadVideo(src, isUrl, name) {
+  async function loadVideo(src, isUrl, name, silent) {
     go.disabled = true;
     result.classList.add('hide');
     setMsg('');
@@ -187,18 +187,47 @@
       infoEl.textContent = `Durasi: ${fmtDur(video.duration)} · Ukuran asli: ${video.videoWidth}×${video.videoHeight}`;
       go.disabled = false;
       updateEstimate();
+      return true;
     } catch (e) {
       infoEl.textContent = '';
-      setErr(e.message);
+      if (!silent) setErr(e.message);
+      return false;
     }
   }
 
-  $('loadUrl').onclick = () => {
+  $('loadUrl').onclick = async () => {
     const u = $('url').value.trim();
     if (!/^https?:\/\//i.test(u)) { setErr('Masukkan link yang diawali http:// atau https://'); return; }
     let nm = 'video';
     try { nm = decodeURIComponent(new URL(u).pathname.split('/').pop().replace(/\.[^.]+$/, '')) || 'video'; } catch (_) {}
-    loadVideo(u, true, nm);
+    setMsg('');
+
+    // 1) Coba langsung
+    if (await loadVideo(u, true, nm, true)) return;
+
+    // 2) Gagal (biasanya CORS) -> coba lewat proxy Vercel
+    infoEl.textContent = 'Server menolak akses langsung. Mencoba lewat proxy...';
+    const p = '/api/proxy?url=' + encodeURIComponent(u);
+    try {
+      const r = await fetch(p, { headers: { Range: 'bytes=0-0' } });
+      try { if (r.body) r.body.cancel(); } catch (_) {}
+      if (!r.ok) {
+        let msg = 'Proxy menolak link ini.';
+        if (r.status === 404) {
+          msg = 'Proxy belum terpasang. Pastikan file api/proxy.js ada di repo, lalu tunggu Vercel selesai deploy ulang.';
+        } else {
+          try { const j = await r.clone().json(); if (j && j.error) msg = j.error; } catch (_) {}
+        }
+        infoEl.textContent = '';
+        setErr(msg);
+        return;
+      }
+    } catch (e) {
+      infoEl.textContent = '';
+      setErr('Tidak bisa menghubungi proxy. Pastikan halaman dibuka dari alamat Vercel Anda.');
+      return;
+    }
+    await loadVideo(p, false, nm);
   };
 
   $('file').onchange = () => {
