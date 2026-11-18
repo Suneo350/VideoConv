@@ -5,67 +5,116 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Video ke Gambar</title>
 <style>
-  :root { --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --muted:#6b7686; --accent:#1a73e8; --line:#dde3ea; }
+  :root { --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --muted:#6b7686; --accent:#1a73e8; --line:#dde3ea; --err:#c62828; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#12161c; --card:#1b212a; --ink:#e8edf3; --muted:#93a0b0; --accent:#6aa9ff; --line:#2b3440; }
+    :root { --bg:#12161c; --card:#1b212a; --ink:#e8edf3; --muted:#93a0b0; --accent:#6aa9ff; --line:#2b3440; --err:#ff8a80; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   main { max-width:720px; margin:0 auto; padding:16px; }
   h1 { font-size:1.4rem; margin:8px 0 4px; }
+  h2 { font-size:1rem; margin:0 0 6px; }
   p.sub { margin:0 0 16px; color:var(--muted); font-size:.9rem; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
-  label { display:block; font-size:.85rem; color:var(--muted); margin:10px 0 4px; }
-  input[type=file], input[type=number] {
+  label { display:block; font-size:.85rem; color:var(--muted); margin:12px 0 4px; }
+  input[type=file], input[type=number], input[type=url], select {
     width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;
     background:var(--bg); color:var(--ink); font-size:1rem;
   }
-  .row { display:flex; gap:10px; }
-  .row > div { flex:1; }
+  .tabs { display:flex; gap:8px; margin-bottom:6px; }
+  .tabs button { margin:0; padding:9px; background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .tabs button.on { background:var(--accent); color:#fff; }
+  .pair { display:flex; gap:8px; }
+  .pair input { flex:2; }
+  .pair select { flex:1; }
   button {
-    width:100%; margin-top:14px; padding:12px; border:0; border-radius:10px;
+    width:100%; margin-top:12px; padding:12px; border:0; border-radius:10px;
     background:var(--accent); color:#fff; font-size:1rem; font-weight:600;
   }
   button:disabled { opacity:.5; }
   button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
-  video { width:100%; border-radius:8px; margin-top:10px; background:#000; display:none; }
+  video { width:100%; border-radius:8px; margin-top:10px; background:#000; display:none; max-height:300px; }
   progress { width:100%; height:10px; margin-top:12px; display:none; }
-  #status { font-size:.9rem; color:var(--muted); margin-top:8px; min-height:1.2em; }
-  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-top:10px; }
+  .note { font-size:.85rem; color:var(--muted); margin-top:8px; }
+  .err { color:var(--err); }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-top:10px; }
   .thumb { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--card); }
   .thumb img { width:100%; display:block; }
-  .thumb a { display:block; text-align:center; padding:6px; font-size:.8rem; color:var(--accent); text-decoration:none; }
+  .thumb .cap { font-size:.72rem; color:var(--muted); text-align:center; padding:4px 2px 0; }
+  .thumb button { margin:0; border-radius:0; padding:7px; font-size:.8rem; background:transparent; color:var(--accent); font-weight:500; }
+  .hide { display:none !important; }
 </style>
 </head>
 <body>
 <main>
   <h1>Video ke Gambar (PNG)</h1>
-  <p class="sub">Semua diproses di HP/browser Anda. Video tidak diunggah ke mana pun.</p>
+  <p class="sub">Diproses di browser Anda. Video tidak diunggah ke server kami.</p>
 
   <div class="card">
-    <label for="file">Pilih video</label>
-    <input type="file" id="file" accept="video/*">
-    <video id="preview" controls playsinline muted></video>
-
-    <div class="row">
-      <div>
-        <label for="interval">Ambil gambar tiap (detik)</label>
-        <input type="number" id="interval" value="1" min="0.1" step="0.1">
-      </div>
-      <div>
-        <label for="maxw">Lebar maks (px, 0 = asli)</label>
-        <input type="number" id="maxw" value="0" min="0" step="10">
-      </div>
+    <h2>1. Sumber video</h2>
+    <div class="tabs">
+      <button id="tabUrl" class="on" type="button">Dari link</button>
+      <button id="tabFile" type="button">Dari file</button>
     </div>
 
-    <button id="go" disabled>Ekstrak Gambar</button>
-    <progress id="bar" value="0" max="1"></progress>
-    <div id="status"></div>
+    <div id="boxUrl">
+      <label for="url">Link langsung video (.mp4 / .webm)</label>
+      <input type="url" id="url" placeholder="https://contoh.com/video.mp4" inputmode="url">
+      <button id="loadUrl" type="button">Muat Video</button>
+      <div class="note">Server pemilik video harus mengizinkan akses dari situs lain (CORS). Jika gagal, unduh videonya ke HP lalu pakai tab "Dari file".</div>
+    </div>
+
+    <div id="boxFile" class="hide">
+      <label for="file">Pilih video dari HP</label>
+      <input type="file" id="file" accept="video/*">
+    </div>
+
+    <video id="preview" controls playsinline muted preload="auto"></video>
+    <div class="note" id="info"></div>
   </div>
 
-  <div class="card" id="result" style="display:none">
-    <strong id="count"></strong>
-    <button id="zip" class="secondary">Unduh Semua (ZIP)</button>
+  <div class="card">
+    <h2>2. Pengaturan</h2>
+
+    <label for="startV">Mulai dari</label>
+    <div class="pair">
+      <input type="number" id="startV" value="0" min="0" step="any" inputmode="decimal">
+      <select id="startU"><option value="s">detik</option><option value="m">menit</option></select>
+    </div>
+
+    <label for="endV">Sampai (kosongkan = sampai akhir video)</label>
+    <div class="pair">
+      <input type="number" id="endV" min="0" step="any" inputmode="decimal" placeholder="akhir video">
+      <select id="endU"><option value="s">detik</option><option value="m">menit</option></select>
+    </div>
+
+    <label for="intV">Ambil satu gambar setiap</label>
+    <div class="pair">
+      <input type="number" id="intV" value="1" min="0.04" step="any" inputmode="decimal">
+      <select id="intU"><option value="s">detik</option><option value="m">menit</option></select>
+    </div>
+
+    <label for="res">Resolusi gambar</label>
+    <select id="res">
+      <option value="0" selected>Asli / maksimal (sesuai video)</option>
+      <option value="2160">Maks. tinggi 2160 px (4K)</option>
+      <option value="1440">Maks. tinggi 1440 px</option>
+      <option value="1080">Maks. tinggi 1080 px</option>
+      <option value="720">Maks. tinggi 720 px</option>
+      <option value="480">Maks. tinggi 480 px</option>
+    </select>
+    <div class="note">PNG tanpa kompresi kualitas, jadi "Asli" adalah kualitas tertinggi. Ukuran file bisa besar.</div>
+
+    <div class="note" id="estimate"></div>
+    <button id="go" type="button" disabled>Ekstrak Gambar</button>
+    <button id="cancel" type="button" class="secondary hide">Batal</button>
+    <progress id="bar" value="0" max="1"></progress>
+    <div class="note" id="status"></div>
+  </div>
+
+  <div class="card hide" id="result">
+    <h2 id="count"></h2>
+    <button id="zip" type="button">Unduh Semua (ZIP)</button>
     <div id="grid"></div>
   </div>
 </main>
@@ -74,98 +123,225 @@
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
-  const fileEl = $('file'), video = $('preview'), go = $('go'), bar = $('bar');
-  const statusEl = $('status'), grid = $('grid'), result = $('result'), countEl = $('count');
-  let frames = []; // {name, blob}
+  const video = $('preview'), go = $('go'), cancelBtn = $('cancel'), bar = $('bar');
+  const statusEl = $('status'), infoEl = $('info'), estEl = $('estimate');
+  const grid = $('grid'), result = $('result'), countEl = $('count');
+
+  let frames = [];            // {name, blob}
   let baseName = 'video';
+  let cancelled = false;
+  let objectUrl = null;
 
-  fileEl.addEventListener('change', () => {
-    const f = fileEl.files[0];
-    if (!f) return;
-    baseName = f.name.replace(/\.[^.]+$/, '') || 'video';
-    video.src = URL.createObjectURL(f);
-    video.style.display = 'block';
-    go.disabled = false;
-    statusEl.textContent = '';
+  const toSec = (v, u) => (parseFloat(v) || 0) * (u === 'm' ? 60 : 1);
+  const once = (el, ev, ms) => new Promise((res, rej) => {
+    const t = ms ? setTimeout(() => rej(new Error('Waktu habis saat memuat/seek video.')), ms) : null;
+    el.addEventListener(ev, () => { if (t) clearTimeout(t); res(); }, { once: true });
   });
+  const fmtDur = (s) => {
+    const m = Math.floor(s / 60), r = (s % 60).toFixed(1);
+    return m ? `${m} menit ${r} detik` : `${r} detik`;
+  };
+  const setErr = (msg) => { statusEl.className = 'note err'; statusEl.textContent = msg; };
+  const setMsg = (msg) => { statusEl.className = 'note'; statusEl.textContent = msg; };
 
-  const once = (el, ev) => new Promise((res) => el.addEventListener(ev, res, { once: true }));
+  // Tab
+  function tab(which) {
+    $('tabUrl').classList.toggle('on', which === 'url');
+    $('tabFile').classList.toggle('on', which === 'file');
+    $('boxUrl').classList.toggle('hide', which !== 'url');
+    $('boxFile').classList.toggle('hide', which !== 'file');
+  }
+  $('tabUrl').onclick = () => tab('url');
+  $('tabFile').onclick = () => tab('file');
 
-  go.addEventListener('click', async () => {
-    const interval = Math.max(0.1, parseFloat($('interval').value) || 1);
-    const maxw = Math.max(0, parseInt($('maxw').value, 10) || 0);
-
+  // Muat video
+  async function loadVideo(src, isUrl, name) {
     go.disabled = true;
-    grid.innerHTML = '';
-    frames = [];
-    result.style.display = 'none';
-    bar.style.display = 'block';
-    bar.value = 0;
+    result.classList.add('hide');
+    setMsg('');
+    infoEl.textContent = 'Memuat video...';
+    baseName = name;
+    video.pause();
+    video.removeAttribute('src');
+    if (isUrl) video.crossOrigin = 'anonymous'; else video.removeAttribute('crossorigin');
+    video.src = src;
+    video.style.display = 'block';
+    video.load();
 
     try {
-      if (!isFinite(video.duration) || video.readyState < 1) await once(video, 'loadedmetadata');
-      video.pause();
+      await Promise.race([
+        once(video, 'loadedmetadata', 30000),
+        new Promise((_, rej) => video.addEventListener('error', () =>
+          rej(new Error(isUrl
+            ? 'Video tidak bisa dimuat. Link salah, bukan file video langsung, atau server menolak akses (CORS). Coba unduh videonya lalu pakai tab "Dari file".'
+            : 'File video tidak bisa dibuka di browser ini.')), { once: true }))
+      ]);
 
-      const duration = video.duration;
-      const times = [];
-      for (let t = 0; t < duration; t += interval) times.push(t);
-      if (!times.length) times.push(0);
+      // Beberapa webm tidak punya durasi di header
+      if (!isFinite(video.duration)) {
+        video.currentTime = 1e101;
+        await once(video, 'timeupdate', 10000);
+        video.currentTime = 0;
+        await once(video, 'seeked', 10000);
+      }
+      infoEl.textContent = `Durasi: ${fmtDur(video.duration)} · Ukuran asli: ${video.videoWidth}×${video.videoHeight}`;
+      go.disabled = false;
+      updateEstimate();
+    } catch (e) {
+      infoEl.textContent = '';
+      setErr(e.message);
+    }
+  }
 
-      let w = video.videoWidth, h = video.videoHeight;
-      if (maxw && w > maxw) { h = Math.round(h * maxw / w); w = maxw; }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      const pad = String(times.length).length;
+  $('loadUrl').onclick = () => {
+    const u = $('url').value.trim();
+    if (!/^https?:\/\//i.test(u)) { setErr('Masukkan link yang diawali http:// atau https://'); return; }
+    let nm = 'video';
+    try { nm = decodeURIComponent(new URL(u).pathname.split('/').pop().replace(/\.[^.]+$/, '')) || 'video'; } catch (_) {}
+    loadVideo(u, true, nm);
+  };
 
+  $('file').onchange = () => {
+    const f = $('file').files[0];
+    if (!f) return;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(f);
+    loadVideo(objectUrl, false, f.name.replace(/\.[^.]+$/, '') || 'video');
+  };
+
+  // Rentang & estimasi
+  function getRange() {
+    const dur = video.duration;
+    const start = Math.max(0, toSec($('startV').value, $('startU').value));
+    const endRaw = $('endV').value.trim();
+    const end = endRaw === '' ? dur : Math.min(dur, toSec(endRaw, $('endU').value));
+    const interval = Math.max(0.04, toSec($('intV').value, $('intU').value) || 1);
+    return { start, end, interval };
+  }
+  function buildTimes() {
+    const { start, end, interval } = getRange();
+    const times = [];
+    for (let i = 0; ; i++) {
+      const t = start + i * interval;
+      if (t >= end) break;
+      times.push(t);
+    }
+    return times;
+  }
+  function updateEstimate() {
+    if (!isFinite(video.duration)) { estEl.textContent = ''; return; }
+    const { start, end } = getRange();
+    if (end <= start) { estEl.textContent = 'Rentang waktu tidak valid (akhir harus lebih besar dari mulai).'; return; }
+    const n = buildTimes().length;
+    estEl.textContent = `Perkiraan: ${n} gambar` + (n > 200 ? ' (banyak, bisa berat di HP; pertimbangkan interval lebih besar)' : '');
+  }
+  ['startV','startU','endV','endU','intV','intU'].forEach((id) => $(id).addEventListener('input', updateEstimate));
+
+  // Ekstrak
+  const pad2 = (n) => String(n).padStart(2, '0');
+  function stamp(t, withMs) {
+    const ms = Math.round(t * 1000);
+    const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), r = ms % 1000;
+    return `${pad2(m)}m${pad2(s)}s` + (withMs ? String(r).padStart(3, '0') + 'ms' : '');
+  }
+
+  go.onclick = async () => {
+    const { start, end, interval } = getRange();
+    if (!(end > start)) { setErr('Rentang waktu tidak valid.'); return; }
+    const times = buildTimes();
+    if (!times.length) { setErr('Tidak ada gambar yang akan diambil.'); return; }
+
+    cancelled = false;
+    go.classList.add('hide');
+    cancelBtn.classList.remove('hide');
+    grid.innerHTML = '';
+    frames = [];
+    result.classList.add('hide');
+    bar.style.display = 'block';
+    bar.value = 0;
+    setMsg('');
+    video.pause();
+
+    const maxH = parseInt($('res').value, 10) || 0;
+    let w = video.videoWidth, h = video.videoHeight;
+    if (maxH && h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const th = document.createElement('canvas');
+    th.width = 160; th.height = Math.max(1, Math.round(160 * h / w));
+    const tctx = th.getContext('2d');
+    const pad = String(times.length).length;
+    const withMs = interval < 1;
+
+    try {
       for (let i = 0; i < times.length; i++) {
-        video.currentTime = Math.min(times[i], Math.max(0, duration - 0.05));
-        await once(video, 'seeked');
+        if (cancelled) break;
+        video.currentTime = Math.min(times[i], Math.max(0, video.duration - 0.05));
+        await once(video, 'seeked', 20000);
         ctx.drawImage(video, 0, 0, w, h);
         const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
-        const name = `${baseName}_${String(i + 1).padStart(pad, '0')}.png`;
+        if (!blob) throw new Error('Gagal membuat gambar (memori HP mungkin penuh).');
+        const name = `${baseName}_${String(i + 1).padStart(pad, '0')}_${stamp(times[i], withMs)}.png`;
         frames.push({ name, blob });
-        addThumb(name, blob);
+
+        tctx.drawImage(video, 0, 0, th.width, th.height);
+        addThumb(name, blob, th.toDataURL('image/jpeg', 0.6), stamp(times[i], withMs));
+
         bar.value = (i + 1) / times.length;
-        statusEl.textContent = `Memproses ${i + 1} dari ${times.length}...`;
+        setMsg(`Memproses ${i + 1} dari ${times.length}...`);
       }
-
-      statusEl.textContent = 'Selesai.';
-      countEl.textContent = `${frames.length} gambar PNG`;
-      result.style.display = 'block';
+      setMsg(cancelled ? `Dibatalkan. ${frames.length} gambar sudah jadi.` : 'Selesai.');
     } catch (e) {
-      statusEl.textContent = 'Gagal: ' + e.message;
+      if (e && e.name === 'SecurityError') {
+        setErr('Server video tidak mengizinkan pengambilan gambar (CORS). Unduh videonya ke HP lalu pakai tab "Dari file".');
+      } else {
+        setErr('Gagal: ' + e.message);
+      }
     } finally {
-      go.disabled = false;
+      cancelBtn.classList.add('hide');
+      go.classList.remove('hide');
+      if (frames.length) {
+        countEl.textContent = `${frames.length} gambar PNG (${w}×${h})`;
+        result.classList.remove('hide');
+      }
     }
-  });
+  };
+  cancelBtn.onclick = () => { cancelled = true; };
 
-  function addThumb(name, blob) {
-    const url = URL.createObjectURL(blob);
+  function download(blob, name) {
+    const a = document.createElement('a');
+    const u = URL.createObjectURL(blob);
+    a.href = u; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 10000);
+  }
+
+  function addThumb(name, blob, thumbUrl, label) {
     const div = document.createElement('div');
     div.className = 'thumb';
-    div.innerHTML = `<img src="${url}" alt="${name}"><a href="${url}" download="${name}">Unduh</a>`;
+    div.innerHTML = `<img alt=""><div class="cap"></div><button type="button">Unduh</button>`;
+    div.querySelector('img').src = thumbUrl;
+    div.querySelector('.cap').textContent = label;
+    div.querySelector('button').onclick = () => download(blob, name);
     grid.appendChild(div);
   }
 
-  $('zip').addEventListener('click', async () => {
-    if (!window.JSZip) { statusEl.textContent = 'Library ZIP gagal dimuat. Cek koneksi, lalu muat ulang halaman.'; return; }
+  $('zip').onclick = async () => {
+    if (!window.JSZip) { setErr('Library ZIP gagal dimuat. Cek koneksi, lalu muat ulang halaman.'); return; }
     const btn = $('zip');
     btn.disabled = true; btn.textContent = 'Membuat ZIP...';
     try {
       const zip = new JSZip();
       frames.forEach((f) => zip.file(f.name, f.blob));
-      const out = await zip.generateAsync({ type: 'blob' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(out);
-      a.download = baseName + '_gambar.zip';
-      a.click();
+      const out = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      download(out, baseName + '_gambar.zip');
     } catch (e) {
-      statusEl.textContent = 'Gagal membuat ZIP: ' + e.message;
+      setErr('Gagal membuat ZIP: ' + e.message + ' (coba kurangi jumlah gambar atau resolusi)');
     } finally {
       btn.disabled = false; btn.textContent = 'Unduh Semua (ZIP)';
     }
-  });
+  };
 })();
 </script>
 </body>
